@@ -35,9 +35,9 @@ class MNISTModelImbuto(nn.Module):
         logits = self.linear_relu_stack(x) # Passano attraverso l'imbuto
         return logits                     # Escono come [64, 10]
 
-class MNISTModel(nn.Module):
+class MNISTModelPiatto(nn.Module):
     def __init__(self, input_size=784, hidden_size=512, num_classes=10):
-        super(MNISTModel, self).__init__()
+        super(MNISTModelPiatto, self).__init__()
         
         # 1. Appiattiamo l'immagine 28x28 in un vettore 1D da 784 pixel
         self.flatten = nn.Flatten() 
