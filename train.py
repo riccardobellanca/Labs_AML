@@ -1,60 +1,60 @@
 import torch
 import torch.nn as nn
 import wandb
-from models.mlp import MNISTModel
+import argparse
+from models.mlp import MNISTModelPiatto, MNISTModelImbuto
 from dataset.mnist_loader import get_mnist_loaders
 
-def train():
-    # 1. Inizializza WandB
+def train(args):
+    # 1. Inizializza WandB con la configurazione scelta
     wandb.init(
-        project="mnist-professional-sandbox",
+        project="mnist-comparison",
         config={
-            "learning_rate": 0.001,
-            "epochs": 5,
-            "batch_size": 64,
-            "hidden_size": 512
+            "model_type": args.model,
+            "learning_rate": args.lr,
+            "epochs": args.epochs,
+            "batch_size": args.batch,
         }
     )
-    config = wandb.config # Accediamo agli iperparametri via config
+    config = wandb.config
 
-    # 2. Setup Device, Data e Modello
+    # 2. Setup Device e Data
     device = "cuda" if torch.cuda.is_available() else "cpu"
     train_loader, _ = get_mnist_loaders(batch_size=config.batch_size)
     
-    model = MNISTModel(hidden_size=config.hidden_size).to(device)
+    # 3. Selezione del Modello
+    if config.model_type == "imbuto":
+        model = MNISTModelImbuto().to(device)
+    else:
+        model = MNISTModelPiatto().to(device)
     
-    # 3. Loss e Optimizer
+    print(f"--- Allenamento del modello: {config.model_type} ---")
+
+    # 4. Loss e Optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
-    # 4. Training Loop [cite: 562, 563, 591]
+    # 5. Training Loop
     model.train()
     for epoch in range(config.epochs):
         running_loss = 0.0
         correct = 0
         total = 0
         
-        for batch_idx, (data, target) in enumerate(train_loader):
+        for data, target in train_loader:
             data, target = data.to(device), target.to(device)
             
-            # Reset gradienti
             optimizer.zero_grad()
-            
-            # Forward
             output = model(data)
             loss = criterion(output, target)
-            
-            # Backward + Step
             loss.backward()
             optimizer.step()
             
-            # Statistiche
             running_loss += loss.item()
             _, predicted = output.max(1)
             total += target.size(0)
             correct += predicted.eq(target).sum().item()
             
-        # 5. Log delle metriche su WandB 
         epoch_acc = 100. * correct / total
         epoch_loss = running_loss / len(train_loader)
         
@@ -66,9 +66,19 @@ def train():
         
         print(f"Epoch {epoch+1}: Loss {epoch_loss:.4f}, Accuracy {epoch_acc:.2f}%")
 
-    # 6. Salva i pesi localmente
-    torch.save(model.state_dict(), "models/mnist_model.pth")
+    # 6. Salva i pesi con un nome specifico per non sovrascriverli
+    save_path = f"models/mnist_{config.model_type}.pth"
+    torch.save(model.state_dict(), save_path)
+    print(f"Modello salvato in {save_path}")
     wandb.finish()
 
 if __name__ == "__main__":
-    train()
+    # Parser per gestire gli argomenti da riga di comando
+    parser = argparse.ArgumentParser(description="MNIST Training Comparison")
+    parser.add_argument("--model", type=str, default="piatto", choices=["piatto", "imbuto"], help="Scegli l'architettura")
+    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
+    parser.add_argument("--epochs", type=int, default=5, help="Numero di epoche")
+    parser.add_argument("--batch", type=int, default=64, help="Batch size")
+    
+    args = parser.parse_args()
+    train(args)
